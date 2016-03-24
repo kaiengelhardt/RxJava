@@ -24,6 +24,9 @@ import rx.internal.util.*;
 import rx.observables.*;
 import rx.observers.SafeSubscriber;
 import rx.plugins.*;
+import rx.reactiveinspector.logger.LoggingOnSubscribe;
+import rx.reactiveinspector.logger.LoggingSubscriber;
+import rx.reactiveinspector.logger.RxLogger;
 import rx.schedulers.*;
 import rx.subscriptions.Subscriptions;
 
@@ -44,7 +47,7 @@ import rx.subscriptions.Subscriptions;
  *            the type of the items emitted by the Observable
  */
 public class Observable<T> {
-
+	
     final OnSubscribe<T> onSubscribe;
 
     /**
@@ -57,7 +60,8 @@ public class Observable<T> {
      *            {@link OnSubscribe} to be executed when {@link #subscribe(Subscriber)} is called
      */
     protected Observable(OnSubscribe<T> f) {
-        this.onSubscribe = f;
+    	// Debugging
+        this.onSubscribe = new LoggingOnSubscribe<T>(f);
     }
 
     static final RxJavaObservableExecutionHook hook = RxJavaPlugins.getInstance().getObservableExecutionHook();
@@ -151,12 +155,26 @@ public class Observable<T> {
      * @see <a href="https://github.com/ReactiveX/RxJava/wiki/Implementing-Your-Own-Operators">RxJava wiki: Implementing Your Own Operators</a>
      */
     public final <R> Observable<R> lift(final Operator<? extends R, ? super T> operator) {
-        return new Observable<R>(new OnSubscribe<R>() {
+    	
+    	// OMG, please kill me.
+    	// TODO: Fix shit.
+    	final ArrayList<LoggingOnSubscribe<R>> shit = new ArrayList<>();
+    	
+        final Observable<R> observable = new Observable<R>(new OnSubscribe<R>() {
             @Override
-            public void call(Subscriber<? super R> o) {
+            public void call(Subscriber<? super R> o) {            	
                 try {
-                    Subscriber<? super T> st = hook.onLift(operator).call(o);
-                    try {
+                	
+                	Subscriber<? super T> st = new LoggingSubscriber<T>(hook.onLift(operator).call(o));
+                	
+                	// 
+                	RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) onSubscribe, (LoggingSubscriber<? super T>) st);
+                	if (shit.size() > 0) {
+                    	LoggingOnSubscribe<R> innerOnSubscribe = shit.get(0);
+                    	RxLogger.getSharedLogger().logNodeAttached((LoggingSubscriber<? super T>) st, innerOnSubscribe);
+                    }
+                    
+                	try {
                         // new Subscriber created and being subscribed with so 'onStart' it
                         st.onStart();
                         onSubscribe.call(st);
@@ -175,6 +193,10 @@ public class Observable<T> {
                 }
             }
         });
+        
+        shit.add((LoggingOnSubscribe<R>) observable.onSubscribe);
+                
+        return observable;
     }
     
     /**
@@ -1252,7 +1274,7 @@ public class Observable<T> {
      */
     public static <T> Observable<T> from(Future<? extends T> future, Scheduler scheduler) {
         // TODO in a future revision the Scheduler will become important because we'll start polling instead of blocking on the Future
-        return create(OnSubscribeToObservableFuture.toObservableFuture(future)).subscribeOn(scheduler);
+        return (Observable<T>) create(OnSubscribeToObservableFuture.toObservableFuture(future)).subscribeOn(scheduler);
     }
 
     /**
@@ -8379,7 +8401,12 @@ public class Observable<T> {
         if (subscriber == null) {
             throw new IllegalArgumentException("observer can not be null");
         }
-        if (observable.onSubscribe == null) {
+        
+        // Debugging
+        LoggingSubscriber<T> debugSubscriber = new LoggingSubscriber<>(subscriber);
+    	subscriber = debugSubscriber;
+        
+    	if (observable.onSubscribe == null) {
             throw new IllegalStateException("onSubscribe function can not be null.");
             /*
              * the subscribe function can also be overridden but generally that's not the appropriate approach
@@ -8403,9 +8430,14 @@ public class Observable<T> {
         // The code below is exactly the same an unsafeSubscribe but not used because it would 
         // add a significant depth to already huge call stacks.
         try {
+            // Debugging
+            RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) observable.onSubscribe, debugSubscriber);
+        	
             // allow the hook to intercept and/or decorate
             hook.onSubscribeStart(observable, observable.onSubscribe).call(subscriber);
-            return hook.onSubscribeReturn(subscriber);
+            Subscription subscription = hook.onSubscribeReturn(subscriber);
+                        
+            return subscription;
         } catch (Throwable e) {
             // special handling for certain Throwable/Error/Exception types
             Exceptions.throwIfFatal(e);
