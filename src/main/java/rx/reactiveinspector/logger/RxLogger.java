@@ -98,10 +98,10 @@ public class RxLogger {
 		}
 	}
 	
-	public <T, U> void logNodeAttached(Debuggable<T> source, Debuggable<U> destination) {
+	public <T, U> void logNodeAttached(Debuggable<T> source, UUID destinationID) {
 		ReactiveVariable variable = createReactiveVariable(source, DependencyGraphHistoryType.NODE_ATTACHED);
 		try {
-			remoteLogger.logNodeAttached(variable, destination.getDebugID(), getBreakpointInformation());
+			remoteLogger.logNodeAttached(variable, destinationID, getBreakpointInformation());
 		} catch (RemoteException e) {
 			e.printStackTrace();
 		}

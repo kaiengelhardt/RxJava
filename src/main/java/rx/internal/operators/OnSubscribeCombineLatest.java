@@ -24,6 +24,8 @@ import rx.functions.FuncN;
 import rx.internal.util.RxRingBuffer;
 import rx.internal.util.atomic.SpscLinkedArrayQueue;
 import rx.plugins.RxJavaPlugins;
+import rx.reactiveinspector.logger.LoggingOnSubscribe;
+import rx.reactiveinspector.logger.RxLogger;
 
 public final class OnSubscribeCombineLatest<T, R> implements OnSubscribe<R> {
     final Observable<? extends T>[] sources;
@@ -80,8 +82,11 @@ public final class OnSubscribeCombineLatest<T, R> implements OnSubscribe<R> {
             return;
         }
         
+        UUID debugID = LoggingOnSubscribe.getDebugIDForOnSubscribe(this);
+                
         LatestCoordinator<T, R> lc = new LatestCoordinator<T, R>(s, combiner, count, bufferSize, delayError);
-        lc.subscribe(sources);
+        lc.subscribe(sources, debugID);
+        
     }
     
     static final class LatestCoordinator<T, R> extends AtomicInteger implements Producer, Subscription {
@@ -127,7 +132,7 @@ public final class OnSubscribeCombineLatest<T, R> implements OnSubscribe<R> {
             this.error = new AtomicReference<Throwable>();
         }
         
-        public void subscribe(Observable<? extends T>[] sources) {
+        public void subscribe(Observable<? extends T>[] sources, UUID debugID) {
             Subscriber<T>[] as = subscribers;
             int len = as.length;
             for (int i = 0; i < len; i++) {
@@ -140,7 +145,9 @@ public final class OnSubscribeCombineLatest<T, R> implements OnSubscribe<R> {
                 if (cancelled) {
                     return;
                 }
-                sources[i].subscribe(as[i]);
+                // Debugging
+                Observable.subscribeForCombineLatest(as[i], sources[i], debugID);
+                // The original code was: sources[i].subscribe(as[i]);
             }
         }
         

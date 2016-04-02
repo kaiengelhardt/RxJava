@@ -8412,7 +8412,7 @@ public class Observable<T> {
     }
     
     private static <T> Subscription subscribe(Subscriber<? super T> subscriber, Observable<T> observable) {
-     // validate and proceed
+    	// validate and proceed
         if (subscriber == null) {
             throw new IllegalArgumentException("observer can not be null");
         }
@@ -8446,12 +8446,12 @@ public class Observable<T> {
         // add a significant depth to already huge call stacks.
         try {
             // Debugging
-            RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) observable.onSubscribe, debugSubscriber);
+            RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) observable.onSubscribe, debugSubscriber.getDebugID());
         	
             // allow the hook to intercept and/or decorate
             hook.onSubscribeStart(observable, observable.onSubscribe).call(subscriber);
             Subscription subscription = hook.onSubscribeReturn(subscriber);
-                        
+            
             return subscription;
         } catch (Throwable e) {
             // special handling for certain Throwable/Error/Exception types
@@ -8472,6 +8472,83 @@ public class Observable<T> {
             return Subscriptions.unsubscribed();
         }
     }
+    
+	public static <T> Subscription subscribeForCombineLatest(
+			Subscriber<? super T> subscriber, Observable<T> observable,
+			UUID debugID) {
+		// validate and proceed
+		if (subscriber == null) {
+			throw new IllegalArgumentException("observer can not be null");
+		}
+
+		// Debugging
+		LoggingSubscriber<T> debugSubscriber = new LoggingSubscriber<>(subscriber);
+		subscriber = debugSubscriber;
+		
+		RxLogger.getSharedLogger().logNodeAttached(debugSubscriber, debugID);
+		
+		if (observable.onSubscribe == null) {
+			throw new IllegalStateException(
+					"onSubscribe function can not be null.");
+			/*
+			 * the subscribe function can also be overridden but generally
+			 * that's not the appropriate approach so I won't mention that in
+			 * the exception
+			 */
+		}
+
+		// new Subscriber so onStart it
+		subscriber.onStart();
+
+		/*
+		 * See https://github.com/ReactiveX/RxJava/issues/216 for discussion on
+		 * "Guideline 6.4: Protect calls to user code from within an Observer"
+		 */
+		// if not already wrapped
+		if (!(subscriber instanceof SafeSubscriber)) {
+			// assign to `observer` so we return the protected version
+			subscriber = new SafeSubscriber<T>(subscriber);
+		}
+
+		// The code below is exactly the same an unsafeSubscribe but not used
+		// because it would
+		// add a significant depth to already huge call stacks.
+		try {
+			// Debugging
+			RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) observable.onSubscribe, debugSubscriber.getDebugID());
+
+			// allow the hook to intercept and/or decorate
+			hook.onSubscribeStart(observable, observable.onSubscribe).call(subscriber);
+			Subscription subscription = hook.onSubscribeReturn(subscriber);
+
+			return subscription;
+		} catch (Throwable e) {
+			// special handling for certain Throwable/Error/Exception types
+			Exceptions.throwIfFatal(e);
+			// if an unhandled error occurs executing the onSubscribe we will
+			// propagate it
+			try {
+				subscriber.onError(hook.onSubscribeError(e));
+			} catch (Throwable e2) {
+				Exceptions.throwIfFatal(e2);
+				// if this happens it means the onError itself failed (perhaps
+				// an invalid function implementation)
+				// so we are unable to propagate the error correctly and will
+				// just throw
+				RuntimeException r = new RuntimeException(
+						"Error occurred attempting to subscribe ["
+								+ e.getMessage()
+								+ "] and then again while trying to pass to onError.",
+						e2);
+				// TODO could the hook be the cause of the error in the on error
+				// handling.
+				hook.onSubscribeError(r);
+				// TODO why aren't we throwing the hook's return value.
+				throw r;
+			}
+			return Subscriptions.unsubscribed();
+		}
+	}
 
     /**
      * Asynchronously subscribes Observers to this Observable on the specified {@link Scheduler}.
