@@ -5,6 +5,17 @@ import java.util.UUID;
 import rx.Producer;
 import rx.Subscriber;
 
+/**
+ * @author Kai Engelhardt
+ * This class is a wrapper around Subscriber<T>.
+ * It implements onNext, onCompleted and onError from the Observer interface
+ * to send messages to the debugger. All public non-final methods are implemented
+ * and forwarded to the Subscriber class.
+ * 
+ * The debugger gets the current values and thrown exceptions of a node from here.
+ * 
+ * @param <T> Just passing the type to Subscriber<T>
+ */
 public class LoggingSubscriber<T> extends Subscriber<T> implements Debuggable<T> {
 	
 	private Subscriber<? super T> subscriber;

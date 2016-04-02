@@ -9,6 +9,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.io.File;
 
+/**
+ * @author Kai Engelhardt
+ * 
+ * This class is the central communication path to the Reactive Inspector plugin.
+ */
 public class RxLogger {
 	
 	private static RxLogger sharedLogger = new RxLogger();
