@@ -156,9 +156,24 @@ public class Observable<T> {
      */
     public final <R> Observable<R> lift(final Operator<? extends R, ? super T> operator) {
     	
-    	// OMG, please kill me.
-    	// TODO: Fix shit.
-    	final ArrayList<LoggingOnSubscribe<R>> shit = new ArrayList<>();
+    	// OMG, working around Java Lambdas is horrible.
+    	/*
+    	 * In this box is a value which has to be accessed by the lambda, which gets
+    	 * passed to the Observable constructor below. The problem is that it 
+    	 * is the constructed object itself. I tried making this:
+    	 * 
+    	 * Observable<R> temp = null;
+    	 * Observable<R> observable = new Observable<R>(....
+    	 *    public void call(Subscriber<? super R> o) {
+    	 *        // access temp here - ERROR
+    	 *        ...
+    	 *    });
+    	 * temp = observable;
+    	 * 
+    	 * The problem is, that local variables, which are accessed in a lambda
+    	 * have to be final so I have to trick the compiler with a box.
+    	 */
+    	final ArrayList<LoggingOnSubscribe<R>> box = new ArrayList<>();
     	
         final Observable<R> observable = new Observable<R>(new OnSubscribe<R>() {
             @Override
@@ -168,10 +183,10 @@ public class Observable<T> {
                 	Subscriber<? super T> st = new LoggingSubscriber<T>(hook.onLift(operator).call(o));
                 	
                 	// 
-                	RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) onSubscribe, (LoggingSubscriber<? super T>) st);
-                	if (shit.size() > 0) {
-                    	LoggingOnSubscribe<R> innerOnSubscribe = shit.get(0);
-                    	RxLogger.getSharedLogger().logNodeAttached((LoggingSubscriber<? super T>) st, innerOnSubscribe);
+                	RxLogger.getSharedLogger().logNodeAttached((LoggingOnSubscribe<T>) onSubscribe, ((LoggingSubscriber<? super T>) st).getDebugID());
+                	if (box.size() > 0) {
+                    	LoggingOnSubscribe<R> innerOnSubscribe = box.get(0);
+                    	RxLogger.getSharedLogger().logNodeAttached((LoggingSubscriber<? super T>) st, innerOnSubscribe.getDebugID());
                     }
                     
                 	try {
@@ -194,7 +209,7 @@ public class Observable<T> {
             }
         });
         
-        shit.add((LoggingOnSubscribe<R>) observable.onSubscribe);
+        box.add((LoggingOnSubscribe<R>) observable.onSubscribe);
                 
         return observable;
     }
