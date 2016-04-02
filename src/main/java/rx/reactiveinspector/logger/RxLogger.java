@@ -5,9 +5,7 @@ import de.tuda.stg.reclipse.logger.*;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.util.Arrays;
-import java.util.List;
-import java.io.File;
+import java.util.UUID;
 
 /**
  * @author Kai Engelhardt
@@ -38,7 +36,7 @@ public class RxLogger {
 				}
 			}));
 		} catch (Exception e) {
-			// e.printStackTrace();
+			e.printStackTrace();
 		}
 	}
 
@@ -52,33 +50,22 @@ public class RxLogger {
 				break;
 			}
 		}
-		String className = stackTraceElement.getClassName();
-		//String fileName = stackTraceElement.getFileName();
+		String className = stackTraceElement.getClassName();		
 		
-		// TODO: Write a new source reader and fix this hard coded path.
-		
-		List<File> sourceFiles = Arrays.asList(new File(".src/test/Test.java"));/*SrcReader.getSourceFiles()
-				.stream()
-				.filter(file -> file.getPath().endsWith(fileName))
-				.collect(Collectors.toList());*/
-		String sourceFile = null;
-		if (sourceFiles.size() > 0) {
-			sourceFile = sourceFiles.get(0).getPath();
-		}
-
 		int lineNumber = stackTraceElement.getLineNumber() + 1;
 		String threadName = Thread.currentThread().getName();
 
-		return new BreakpointInformation(sourceFile, className, lineNumber,threadName);
+		// TODO: Write a new source reader and fix this hard coded path.
+		return new BreakpointInformation(".src/test/Test.java", className, lineNumber,threadName);
 	}
 	
 	private <T> ReactiveVariable createReactiveVariable(Debuggable<T> debuggable, DependencyGraphHistoryType historyType) {
 		ReactiveVariableType type = ReactiveVariableType.SIGNAL;
 		
 		if (debuggable instanceof LoggingOnSubscribe) {
-			type = ReactiveVariableType.SIGNAL;
-		} else if (debuggable instanceof LoggingSubscriber) {
 			type = ReactiveVariableType.EVENT_HANDLER;
+		} else if (debuggable instanceof LoggingSubscriber) {
+			type = ReactiveVariableType.SIGNAL;
 		}
 		
 		String simpleVarType = debuggable.getClass().getSimpleName();
@@ -136,6 +123,7 @@ public class RxLogger {
 		if (error instanceof Exception) {
 			Exception exception = (Exception) error;
 			ReactiveVariable variable = createReactiveVariable(debuggable, DependencyGraphHistoryType.NODE_EVALUATION_ENDED_WITH_EXCEPTION);
+			variable.setExceptionOccured(true);
 			try {
 				remoteLogger.logNodeEvaluationEndedWithException(variable, exception, getBreakpointInformation());
 			} catch (RemoteException e) {
